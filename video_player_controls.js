@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Video Player Controls + Gestures
+// @name         Video Player Controls + Gestures (No Volume) - Centered Controls
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Add forward/backward 10sec buttons, seek bar, fullscreen overlay, volume & YouTube-style gestures for HTML5 videos
+// @version      1.3
+// @description  Add forward/backward 10sec, seek bar, fullscreen overlay, YouTube-style gestures for HTML5 videos; volume features removed; center playback buttons under seek bar; tap toggles controls.
 // @author       You
 // @match        *://*/*
 // @grant        none
@@ -65,7 +65,6 @@
         let scrollTimeout;
         window.addEventListener('scroll', () => {
             const now = Date.now();
-            // throttle to ~150ms
             if (now - lastScroll > 120) {
                 hideFloating();
                 lastScroll = now;
@@ -76,7 +75,7 @@
             }
         }, { passive: true });
 
-        // --- Fullscreen overlay container ---
+        // --- Overlay container ---
         const container = document.createElement('div');
         container.style.cssText = `
             position: fixed;
@@ -100,7 +99,7 @@
             background: black;
             position: relative;
             overflow: hidden;
-            touch-action: none; /* we'll manage gestures */
+            touch-action: none; /* manage gestures manually */
         `;
 
         // store original parent to restore later
@@ -112,7 +111,6 @@
                 originalParent = video.parentElement;
                 originalNextSibling = video.nextSibling;
             }
-            // ensure video scales to overlay
             video.style.width = '100%';
             video.style.height = '100%';
             video.style.maxWidth = '100%';
@@ -134,7 +132,6 @@
         };
 
         // --- Controls UI ---
-
         const controlsOverlay = document.createElement('div');
         controlsOverlay.style.cssText = `
             position: absolute;
@@ -172,17 +169,11 @@
             else hideControlsNow();
         };
 
+        // Tapping anywhere on overlay toggles controls (mobile-friendly)
         container.addEventListener('click', (e) => {
-            // only toggle when clicking empty video area
+            // Allow clicks on control elements to stop propagation (buttons will call e.stopPropagation())
             if (e.target === container || e.target === videoWrapper || e.target === video) {
                 toggleControls();
-            }
-        });
-
-        container.addEventListener('touchstart', (e) => {
-            if (e.target === container || e.target === videoWrapper || e.target === video) {
-                // don't block gesture logic
-                // small tap toggles controls; keep minimal
             }
         });
 
@@ -231,35 +222,45 @@
         seekContainer.appendChild(seekBar);
         seekContainer.appendChild(durationDisplay);
 
-        // --- Playback + bottom row (merged) ---
+        // --- Bottom row: centered playback controls + right side speed/fullscreen ---
         const playbackControls = document.createElement('div');
         playbackControls.style.cssText = `
             display:flex;justify-content:space-between;align-items:center;padding:0 15px;margin-top:10px;width:calc(100% - 40px);max-width:1200px;
         `;
 
-        // Left controls: backward, play/pause, forward
+        // Centered small playback group (Option A: horizontal center)
+        const centerControls = document.createElement('div');
+        centerControls.style.cssText = `
+            display:flex;align-items:center;gap:12px;justify-content:center;
+        `;
+
+        const buttonCommonStyle = `
+            background:transparent;border:none;color:white;cursor:pointer;padding:6px;opacity:0.95;
+        `;
+
         const backwardBtn = document.createElement('button');
         backwardBtn.innerHTML = '⏮';
-        backwardBtn.style.cssText = `background:transparent;border:none;color:white;font-size:32px;cursor:pointer;padding:8px;opacity:0.95;`;
+        backwardBtn.style.cssText = `${buttonCommonStyle}font-size:22px;`;
         backwardBtn.onclick = (e) => { e.stopPropagation(); showControls(); video.currentTime = Math.max(0, video.currentTime - 10); };
+        backwardBtn.addEventListener('click', (e) => e.stopPropagation());
 
         const playPauseBtn = document.createElement('button');
         playPauseBtn.innerHTML = '⏸';
-        playPauseBtn.style.cssText = `background:transparent;border:none;color:white;font-size:38px;cursor:pointer;padding:8px;opacity:0.95;`;
+        playPauseBtn.style.cssText = `${buttonCommonStyle}font-size:26px;`;
         playPauseBtn.onclick = (e) => { e.stopPropagation(); showControls(); if (video.paused) video.play(); else video.pause(); updatePlayPauseIcon(); };
+        playPauseBtn.addEventListener('click', (e) => e.stopPropagation());
 
         const forwardBtn = document.createElement('button');
         forwardBtn.innerHTML = '⏭';
-        forwardBtn.style.cssText = `background:transparent;border:none;color:white;font-size:32px;cursor:pointer;padding:8px;opacity:0.95;`;
+        forwardBtn.style.cssText = `${buttonCommonStyle}font-size:22px;`;
         forwardBtn.onclick = (e) => { e.stopPropagation(); showControls(); video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 10); };
+        forwardBtn.addEventListener('click', (e) => e.stopPropagation());
 
-        const leftControls = document.createElement('div');
-        leftControls.style.cssText = `display:flex;align-items:center;gap:20px;`;
-        leftControls.appendChild(backwardBtn);
-        leftControls.appendChild(playPauseBtn);
-        leftControls.appendChild(forwardBtn);
+        centerControls.appendChild(backwardBtn);
+        centerControls.appendChild(playPauseBtn);
+        centerControls.appendChild(forwardBtn);
 
-        // Right controls: speed, fullscreen, volume button & slider
+        // Right controls: speed + fullscreen
         const speedBtn = document.createElement('button');
         speedBtn.innerHTML = '1x';
         speedBtn.style.cssText = `background:rgba(255,255,255,0.14);border:none;color:white;font-size:16px;padding:8px 12px;border-radius:6px;font-weight:600;cursor:pointer;`;
@@ -269,48 +270,19 @@
 
         const fullscreenIconBtn = document.createElement('button');
         fullscreenIconBtn.innerHTML = '⛶';
-        fullscreenIconBtn.style.cssText = `background:transparent;border:none;color:white;font-size:24px;cursor:pointer;padding:5px;`;
+        fullscreenIconBtn.style.cssText = `background:transparent;border:none;color:white;font-size:20px;cursor:pointer;padding:6px;`;
         fullscreenIconBtn.onclick = (e) => { e.stopPropagation(); showControls(); if (document.fullscreenElement) document.exitFullscreen(); else container.requestFullscreen().catch(()=>{}); };
 
-        // Volume button & slider (hidden by default)
-        const volumeWrap = document.createElement('div');
-        volumeWrap.style.cssText = `display:flex;align-items:center;gap:8px;`;
-
-        const volumeBtn = document.createElement('button');
-        volumeBtn.innerHTML = '🔊';
-        volumeBtn.title = 'Volume';
-        volumeBtn.style.cssText = `background:transparent;border:none;color:white;font-size:18px;cursor:pointer;padding:6px;`;
-
-        const volumeSlider = document.createElement('input');
-        volumeSlider.type = 'range';
-        volumeSlider.min = '0';
-        volumeSlider.max = '1';
-        volumeSlider.step = '0.01';
-        volumeSlider.value = String(video.volume ?? 1);
-        volumeSlider.style.cssText = `width:100px;display:none;`;
-        // show slider on click toggle
-        volumeBtn.onclick = (e) => { e.stopPropagation(); showControls(); volumeSlider.style.display = volumeSlider.style.display === 'none' ? 'block' : 'none'; };
-
-        volumeSlider.addEventListener('input', (e) => {
-            e.stopPropagation();
-            video.volume = parseFloat(volumeSlider.value);
-        });
-
-        // hide slider when clicking elsewhere
-        document.addEventListener('click', (e) => {
-            if (!volumeWrap.contains(e.target)) volumeSlider.style.display = 'none';
-        });
-
-        volumeWrap.appendChild(volumeBtn);
-        volumeWrap.appendChild(volumeSlider);
-
         const rightControls = document.createElement('div');
-        rightControls.style.cssText = `display:flex;align-items:center;gap:14px;`;
-        rightControls.appendChild(volumeWrap);
+        rightControls.style.cssText = `display:flex;align-items:center;gap:12px;`;
         rightControls.appendChild(speedBtn);
         rightControls.appendChild(fullscreenIconBtn);
 
-        playbackControls.appendChild(leftControls);
+        // Arrange playbackControls: left spacer (empty) | centerControls (centered) | rightControls
+        const leftSpacer = document.createElement('div');
+        leftSpacer.style.cssText = `width: 1px;`; // small spacer to allow center alignment
+        playbackControls.appendChild(leftSpacer);
+        playbackControls.appendChild(centerControls);
         playbackControls.appendChild(rightControls);
 
         // Close button
@@ -346,9 +318,6 @@
         video.addEventListener('timeupdate', () => {
             if (!seekBar.matches(':active')) seekBar.value = video.currentTime;
             currentTimeDisplay.textContent = formatTime(video.currentTime || 0);
-            // update small icon based on volume
-            volumeBtn.innerHTML = video.muted || video.volume === 0 ? '🔈' : (video.volume > 0.66 ? '🔊' : '🔉');
-            volumeSlider.value = String(video.volume ?? 1);
         });
 
         seekBar.addEventListener('input', (e) => { e.stopPropagation(); video.currentTime = parseFloat(seekBar.value); });
@@ -359,7 +328,7 @@
         video.addEventListener('pause', updatePlayPauseIcon);
         updatePlayPauseIcon();
 
-        // --- Gesture system (Option A: YouTube-style) ---
+        // --- Gesture system (Option A: YouTube-style but without vertical volume) ---
         // State variables
         let lastTap = 0;
         let tapCount = 0;
@@ -369,7 +338,7 @@
 
         // For swipe/drag
         let touchActive = false;
-        let startX = 0, startY = 0, lastX = 0, lastY = 0;
+        let startX = 0, startY = 0;
         let isHorizontal = false, isVertical = false;
         let accumulatedSeekPreview = 0; // seconds preview while dragging
         let previewActive = false;
@@ -396,39 +365,31 @@
         const deltaXToSeconds = (dx) => {
             const w = videoWrapper.clientWidth || window.innerWidth;
             const dur = video.duration || 60;
-            // scale: swipe full width => +/- Math.max(60, 0.3 * duration)
             const scale = Math.max(60, dur * 0.3);
             return (dx / w) * scale;
         };
 
-        // Touch handlers (use passive:false to allow preventDefault)
+        // Touch handlers
         videoWrapper.addEventListener('touchstart', (ev) => {
             if (!ev.touches || ev.touches.length > 1) return;
             const t = ev.touches[0];
             touchActive = true;
-            startX = lastX = t.clientX;
-            startY = lastY = t.clientY;
+            startX = t.clientX;
+            startY = t.clientY;
             isHorizontal = isVertical = false;
             accumulatedSeekPreview = 0;
 
-            // Long press detection
+            // Long press detection (show preview)
             clearTimeout(longPressTimer);
             longPressTimer = setTimeout(() => {
-                // long press -> show preview at current time
                 showPreview(video.currentTime || 0);
             }, LONG_PRESS_DELAY);
 
             // Double-tap detection
             const now = Date.now();
-            if (now - lastTap <= DOUBLE_TAP_MAX_DELAY) {
-                tapCount += 1;
-            } else {
-                tapCount = 1;
-            }
+            if (now - lastTap <= DOUBLE_TAP_MAX_DELAY) tapCount += 1;
+            else tapCount = 1;
             lastTap = now;
-
-            // If double-tap occurs: handle on touchend to determine left/right
-            // Prevent the page from scrolling while interacting
         }, { passive: false });
 
         videoWrapper.addEventListener('touchmove', (ev) => {
@@ -446,25 +407,12 @@
                 }
             }
 
+            // Only handle horizontal swipes (vertical gestures are ignored to allow page scroll)
             if (isHorizontal) {
-                // prevent page horizontal swipe
-                ev.preventDefault();
+                ev.preventDefault(); // prevent page horizontal swipe
                 const sec = deltaXToSeconds(dx);
                 accumulatedSeekPreview = sec;
                 showPreview((video.currentTime || 0) + accumulatedSeekPreview);
-            } else if (isVertical) {
-                ev.preventDefault();
-                // vertical swipe -> volume change: negative dy => increase
-                const vh = videoWrapper.clientHeight || window.innerHeight;
-                const volDelta = -dy / vh; // -1..1
-                const newVol = Math.max(0, Math.min(1, (video.volume || 0) + volDelta));
-                // show preview as volume percentage
-                previewOverlay.textContent = `Vol ${Math.round(newVol * 100)}%`;
-                previewOverlay.style.display = 'block';
-                previewActive = true;
-                // don't apply continuously here; apply on touchend for smoother experience?
-                // but we can apply continuously:
-                video.volume = newVol;
             }
         }, { passive: false });
 
@@ -473,34 +421,25 @@
             if (!touchActive) return;
             touchActive = false;
 
-            // If we showed preview due to long press and no movement, keep it briefly
-            if (previewActive && accumulatedSeekPreview !== 0) {
-                // commit seek
+            // If we showed preview due to swipe, commit the seek
+            if (previewActive && Math.abs(accumulatedSeekPreview) > 0.5) {
                 const target = Math.max(0, Math.min(video.duration || 0, (video.currentTime || 0) + accumulatedSeekPreview));
                 video.currentTime = target;
                 hidePreview();
-            } else if (previewActive && isVertical) {
-                // volume preview already applied during move, just hide
-                hidePreview();
             } else {
-                // No significant swipe: check for taps/double taps
+                // handle double-tap vs single tap
                 const now = Date.now();
-                // if tapCount >=2 within double-tap window -> double-tap
                 if (tapCount >= 2 && (now - lastTap) <= DOUBLE_TAP_MAX_DELAY + 30) {
-                    // find touch point to know left/right
                     let touchX = 0;
                     if (ev.changedTouches && ev.changedTouches.length) touchX = ev.changedTouches[0].clientX;
                     else touchX = startX;
                     const half = (videoWrapper.clientWidth || window.innerWidth) / 2;
                     if (touchX < half) {
-                        // left double-tap -> rewind 10s
                         video.currentTime = Math.max(0, (video.currentTime || 0) - 10);
-                        // temporary visual feedback
                         previewOverlay.textContent = '⟲ 10s';
                         previewOverlay.style.display = 'block';
                         setTimeout(hidePreview, 600);
                     } else {
-                        // right double-tap -> forward 10s
                         video.currentTime = Math.min(video.duration || Infinity, (video.currentTime || 0) + 10);
                         previewOverlay.textContent = '⟳ 10s';
                         previewOverlay.style.display = 'block';
@@ -508,46 +447,32 @@
                     }
                     tapCount = 0;
                 } else {
-                    // single tap -> toggle controls
-                    showControls();
+                    // single tap toggles controls (show/hide)
+                    toggleControls();
                     setTimeout(() => { tapCount = 0; }, DOUBLE_TAP_MAX_DELAY + 20);
                 }
             }
 
-            // reset flags
             isHorizontal = isVertical = false;
             accumulatedSeekPreview = 0;
         }, { passive: false });
 
-        // Desktop mouse equivalents: double-click left/right and drag
-        let mouseDown = false, mouseStartX = 0, mouseStartY = 0, mouseAccSeek = 0;
+        // Desktop equivalents (mouse): drag to seek preview, dblclick skip
+        let mouseDown = false, mouseStartX = 0, mouseAccSeek = 0;
         videoWrapper.addEventListener('mousedown', (e) => {
+            // left click only
+            if (e.button !== 0) return;
             mouseDown = true;
             mouseStartX = e.clientX;
-            mouseStartY = e.clientY;
             mouseAccSeek = 0;
             e.preventDefault();
-            // start long press detection for mouse (simulate touch)
             longPressTimer = setTimeout(() => { showPreview(video.currentTime || 0); }, LONG_PRESS_DELAY);
         });
         window.addEventListener('mousemove', (e) => {
             if (!mouseDown) return;
             const dx = e.clientX - mouseStartX;
-            const dy = e.clientY - mouseStartY;
-            if (Math.abs(dx) > Math.abs(dy)) {
-                // horizontal -> seek preview
-                mouseAccSeek = deltaXToSeconds(dx);
-                showPreview((video.currentTime || 0) + mouseAccSeek);
-            } else {
-                // vertical -> volume change
-                const vh = videoWrapper.clientHeight || window.innerHeight;
-                const volDelta = -dy / vh;
-                const newVol = Math.max(0, Math.min(1, (video.volume || 0) + volDelta));
-                previewOverlay.textContent = `Vol ${Math.round(newVol * 100)}%`;
-                previewOverlay.style.display = 'block';
-                previewActive = true;
-                video.volume = newVol;
-            }
+            mouseAccSeek = deltaXToSeconds(dx);
+            showPreview((video.currentTime || 0) + mouseAccSeek);
         });
         window.addEventListener('mouseup', (e) => {
             clearTimeout(longPressTimer);
@@ -576,18 +501,6 @@
             setTimeout(hidePreview, 600);
         });
 
-        // Mouse wheel -> volume when hovering overlay
-        videoWrapper.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const delta = -e.deltaY / 1000; // small increments
-            video.volume = Math.max(0, Math.min(1, (video.volume || 0) + delta));
-            showPreview();
-            previewOverlay.textContent = `Vol ${Math.round(video.volume * 100)}%`;
-            setTimeout(hidePreview, 600);
-        }, { passive: false });
-
-        // --- Visual feedback on double-tap (a quick flash) implemented via previewOverlay above ---
-
         // --- Floating button click ---
         floatingBtn.onclick = () => {
             container.style.display = 'flex';
@@ -606,28 +519,23 @@
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
-        // Also keep floating button visible state in sync
+        // Keep floating visibility synced when tab visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) floatingBtn.style.opacity = '0';
             else floatingBtn.style.opacity = '1';
         });
 
-        // Ensure initial volume slider value
-        volumeSlider.value = String(video.volume ?? 1);
-
-        // Accessibility: keyboard shortcuts when overlay open
+        // Keyboard shortcuts when overlay open (volume keys removed)
         document.addEventListener('keydown', (e) => {
             if (container.style.display !== 'flex') return;
             if (e.key === 'ArrowRight') { video.currentTime = Math.min((video.duration || Infinity), (video.currentTime || 0) + 5); showControls(); }
             if (e.key === 'ArrowLeft') { video.currentTime = Math.max(0, (video.currentTime || 0) - 5); showControls(); }
             if (e.key === ' ') { e.preventDefault(); if (video.paused) video.play(); else video.pause(); updatePlayPauseIcon(); showControls(); }
-            if (e.key === 'ArrowUp') { video.volume = Math.min(1, (video.volume || 0) + 0.05); showControls(); }
-            if (e.key === 'ArrowDown') { video.volume = Math.max(0, (video.volume || 0) - 0.05); showControls(); }
             if (e.key === 'f') { if (document.fullscreenElement) document.exitFullscreen(); else container.requestFullscreen().catch(()=>{}); }
             if (e.key === 'Escape') { closeBtn.click(); }
         });
 
-        // --- Periodic hookup in case the video changes or new metadata loaded ---
+        // Ensure seekBar updates on metadata load
         video.addEventListener('loadedmetadata', () => { seekBar.max = video.duration || 0; durationDisplay.textContent = formatTime(video.duration || 0); });
     }
 
