@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Video Player Controls + Gestures (No Volume) - Centered Controls
+// @name         Video Player Controls + Gestures (No Volume) - Centered Controls UPDATED
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  Add forward/backward 10sec, seek bar, fullscreen overlay, YouTube-style gestures for HTML5 videos; volume features removed; center playback buttons under seek bar; tap toggles controls.
+// @version      1.4
+// @description  YouTube-style gestures + seek bar + fullscreen overlay; double-tap left/right/center; play/pause button in left corner; no volume controls; forward/backward buttons removed.
 // @author       You
 // @match        *://*/*
 // @grant        none
@@ -22,7 +22,9 @@
         if (video.dataset.customControlsAdded) return;
         video.dataset.customControlsAdded = 'true';
 
-        // --- Floating button ---
+        /* =============================
+           FLOATING BUTTON
+        ============================== */
         const floatingBtn = document.createElement('div');
         floatingBtn.style.cssText = `
             position: fixed;
@@ -44,142 +46,132 @@
         `;
         floatingBtn.innerHTML = '⛶';
         floatingBtn.title = 'Open Video Controls';
+        document.body.appendChild(floatingBtn);
 
-        // Auto-hide floating button on scroll (throttle)
+        /* Auto hide floating button */
         let lastScroll = 0;
         let floatingHidden = false;
-        const hideFloating = () => {
-            if (!floatingHidden) {
-                floatingBtn.style.opacity = '0';
-                floatingBtn.style.transform = 'translateY(8px)';
-                floatingHidden = true;
-            }
-        };
-        const showFloating = () => {
-            if (floatingHidden) {
-                floatingBtn.style.opacity = '1';
-                floatingBtn.style.transform = 'translateY(0)';
-                floatingHidden = false;
-            }
-        };
         let scrollTimeout;
         window.addEventListener('scroll', () => {
             const now = Date.now();
             if (now - lastScroll > 120) {
-                hideFloating();
+                if (!floatingHidden) {
+                    floatingBtn.style.opacity = "0";
+                    floatingBtn.style.transform = "translateY(10px)";
+                    floatingHidden = true;
+                }
                 lastScroll = now;
                 clearTimeout(scrollTimeout);
                 scrollTimeout = setTimeout(() => {
-                    showFloating();
-                }, 800);
+                    floatingBtn.style.opacity = "1";
+                    floatingBtn.style.transform = "translateY(0)";
+                    floatingHidden = false;
+                }, 700);
             }
-        }, { passive: true });
+        });
 
-        // --- Overlay container ---
+        /* =============================
+           OVERLAY CONTAINER
+        ============================== */
         const container = document.createElement('div');
         container.style.cssText = `
             position: fixed;
-            top: 0; left: 0;
+            inset: 0;
             width: 100%; height: 100%;
             background: rgba(0,0,0,0.95);
             z-index: 999999;
             display: none;
-            flex-direction: column;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
         `;
 
         const videoWrapper = document.createElement('div');
         videoWrapper.style.cssText = `
-            width: 100%;
-            height: 100%;
+            position: relative;
+            width: 100%; height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
             background: black;
-            position: relative;
             overflow: hidden;
-            touch-action: none; /* manage gestures manually */
+            touch-action: none;
         `;
 
-        // store original parent to restore later
+        container.appendChild(videoWrapper);
+        document.body.appendChild(container);
+
+        /* Save original */
         let originalParent = null;
         let originalNextSibling = null;
 
-        const moveVideoToOverlay = () => {
+        function moveVideoToOverlay() {
             if (!originalParent) {
                 originalParent = video.parentElement;
                 originalNextSibling = video.nextSibling;
             }
-            video.style.width = '100%';
-            video.style.height = '100%';
-            video.style.maxWidth = '100%';
-            video.style.maxHeight = '100%';
-            video.style.objectFit = 'contain';
+            video.style.width = "100%";
+            video.style.height = "100%";
+            video.style.objectFit = "contain";
             videoWrapper.appendChild(video);
-        };
+        }
 
-        const restoreVideo = () => {
+        function restoreVideo() {
+            video.style.width = "";
+            video.style.height = "";
+            video.style.objectFit = "";
             if (originalParent) {
-                video.style.width = '';
-                video.style.height = '';
-                video.style.maxWidth = '';
-                video.style.maxHeight = '';
-                video.style.objectFit = '';
                 if (originalNextSibling) originalParent.insertBefore(video, originalNextSibling);
                 else originalParent.appendChild(video);
             }
-        };
+        }
 
-        // --- Controls UI ---
+        /* =============================
+           CONTROLS OVERLAY (BOTTOM AREA)
+        ============================== */
         const controlsOverlay = document.createElement('div');
         controlsOverlay.style.cssText = `
             position: absolute;
-            bottom: 0;
-            left: 0; right: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
+            bottom: 0; left: 0; right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6), transparent);
             padding: 30px 20px 40px;
-            transition: opacity 0.25s, visibility 0.25s;
             opacity: 0; visibility: hidden;
+            transition: opacity .25s, visibility .25s;
         `;
+        videoWrapper.appendChild(controlsOverlay);
 
         let hideControlsTimeout;
-        const showControls = () => {
-            controlsOverlay.style.opacity = '1';
-            controlsOverlay.style.visibility = 'visible';
-            closeBtn.style.opacity = '1';
-            closeBtn.style.visibility = 'visible';
-            clearTimeout(hideControlsTimeout);
-            hideControlsTimeout = setTimeout(() => {
-                controlsOverlay.style.opacity = '0';
-                controlsOverlay.style.visibility = 'hidden';
-                closeBtn.style.opacity = '0';
-                closeBtn.style.visibility = 'hidden';
-            }, 3000);
-        };
-        const hideControlsNow = () => {
-            clearTimeout(hideControlsTimeout);
-            controlsOverlay.style.opacity = '0';
-            controlsOverlay.style.visibility = 'hidden';
-            closeBtn.style.opacity = '0';
-            closeBtn.style.visibility = 'hidden';
-        };
-        const toggleControls = () => {
-            if (controlsOverlay.style.opacity === '0' || controlsOverlay.style.visibility === 'hidden') showControls();
-            else hideControlsNow();
-        };
 
-        // Tapping anywhere on overlay toggles controls (mobile-friendly)
+        function showControls() {
+            controlsOverlay.style.opacity = "1";
+            controlsOverlay.style.visibility = "visible";
+            closeBtn.style.opacity = "1";
+            closeBtn.style.visibility = "visible";
+
+            clearTimeout(hideControlsTimeout);
+            hideControlsTimeout = setTimeout(() => hideControlsNow(), 3000);
+        }
+
+        function hideControlsNow() {
+            controlsOverlay.style.opacity = "0";
+            controlsOverlay.style.visibility = "hidden";
+            closeBtn.style.opacity = "0";
+            closeBtn.style.visibility = "hidden";
+        }
+
+        function toggleControls() {
+            if (controlsOverlay.style.visibility === "hidden") showControls();
+            else hideControlsNow();
+        }
+
         container.addEventListener('click', (e) => {
-            // Allow clicks on control elements to stop propagation (buttons will call e.stopPropagation())
-            if (e.target === container || e.target === videoWrapper || e.target === video) {
-                toggleControls();
-            }
+            if (e.target === container || e.target === videoWrapper) toggleControls();
         });
 
-        // --- Seek row (top) ---
-        const seekContainer = document.createElement('div');
-        seekContainer.style.cssText = `
+        /* =============================
+           SEEK BAR ROW
+        ============================== */
+        const seekRow = document.createElement('div');
+        seekRow.style.cssText = `
             display: flex;
             align-items: center;
             gap: 15px;
@@ -188,328 +180,326 @@
             max-width: 1200px;
         `;
 
-        const currentTimeDisplay = document.createElement('span');
-        currentTimeDisplay.style.cssText = `color:white;font-size:14px;min-width:55px;font-family:-apple-system,system-ui,sans-serif;`;
-        currentTimeDisplay.textContent = '0:00';
+        const curTime = document.createElement('span');
+        curTime.style.cssText = `color:white;font-size:15px;min-width:55px;`;
+        curTime.textContent = "0:00";
 
         const seekBar = document.createElement('input');
-        seekBar.type = 'range';
-        seekBar.min = '0';
-        seekBar.max = '100';
-        seekBar.value = '0';
+        seekBar.type = "range";
+        seekBar.min = "0";
+        seekBar.value = "0";
         seekBar.style.cssText = `
-            flex:1;height:4px;cursor:pointer;-webkit-appearance:none;background:rgba(255,255,255,0.28);border-radius:2px;outline:none;
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.25);
+            border-radius: 2px;
+            -webkit-appearance:none;
         `;
 
-        // seek thumb style
-        const style = document.createElement('style');
-        style.textContent = `
+        /* Thumb style */
+        const s = document.createElement('style');
+        s.textContent = `
             input[type="range"]::-webkit-slider-thumb {
-                -webkit-appearance: none;
-                width: 14px; height:14px; border-radius:50%; background:white; cursor:pointer;
+                -webkit-appearance:none;
+                width:16px;height:16px;
+                border-radius:50%;
+                background:white;
             }
-            input[type="range"]::-moz-range-thumb {
-                width: 14px; height:14px; border-radius:50%; background:white; cursor:pointer; border:none;
-            }
         `;
-        document.head.appendChild(style);
+        document.head.appendChild(s);
 
-        const durationDisplay = document.createElement('span');
-        durationDisplay.style.cssText = `color:white;font-size:14px;min-width:55px;text-align:right;font-family:-apple-system,system-ui,sans-serif;`;
-        durationDisplay.textContent = '0:00';
+        const durTime = document.createElement('span');
+        durTime.style.cssText = `color:white;font-size:15px;min-width:55px;text-align:right;`;
+        durTime.textContent = "0:00";
 
-        seekContainer.appendChild(currentTimeDisplay);
-        seekContainer.appendChild(seekBar);
-        seekContainer.appendChild(durationDisplay);
+        seekRow.appendChild(curTime);
+        seekRow.appendChild(seekBar);
+        seekRow.appendChild(durTime);
 
-        // --- Bottom row: centered playback controls + right side speed/fullscreen ---
-        const playbackControls = document.createElement('div');
-        playbackControls.style.cssText = `
-            display:flex;justify-content:space-between;align-items:center;padding:0 15px;margin-top:10px;width:calc(100% - 40px);max-width:1200px;
-        `;
+        /* =============================
+           BOTTOM CONTROL BAR
+        ============================== */
 
-        // Centered small playback group (Option A: horizontal center)
-        const centerControls = document.createElement('div');
-        centerControls.style.cssText = `
-            display:flex;align-items:center;gap:12px;justify-content:center;
-        `;
-
-        const buttonCommonStyle = `
-            background:transparent;border:none;color:white;cursor:pointer;padding:6px;opacity:0.95;
+        const bottomControls = document.createElement('div');
+        bottomControls.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: calc(100% - 40px);
+            max-width: 1200px;
+            padding: 0 5px;
         `;
 
-        const backwardBtn = document.createElement('button');
-        backwardBtn.innerHTML = '⏮';
-        backwardBtn.style.cssText = `${buttonCommonStyle}font-size:22px;`;
-        backwardBtn.onclick = (e) => { e.stopPropagation(); showControls(); video.currentTime = Math.max(0, video.currentTime - 10); };
-        backwardBtn.addEventListener('click', (e) => e.stopPropagation());
-
+        /* PLAY / PAUSE BUTTON (Left corner!) */
         const playPauseBtn = document.createElement('button');
-        playPauseBtn.innerHTML = '⏸';
-        playPauseBtn.style.cssText = `${buttonCommonStyle}font-size:26px;`;
-        playPauseBtn.onclick = (e) => { e.stopPropagation(); showControls(); if (video.paused) video.play(); else video.pause(); updatePlayPauseIcon(); };
-        playPauseBtn.addEventListener('click', (e) => e.stopPropagation());
-
-        const forwardBtn = document.createElement('button');
-        forwardBtn.innerHTML = '⏭';
-        forwardBtn.style.cssText = `${buttonCommonStyle}font-size:22px;`;
-        forwardBtn.onclick = (e) => { e.stopPropagation(); showControls(); video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 10); };
-        forwardBtn.addEventListener('click', (e) => e.stopPropagation());
-
-        centerControls.appendChild(backwardBtn);
-        centerControls.appendChild(playPauseBtn);
-        centerControls.appendChild(forwardBtn);
-
-        // Right controls: speed + fullscreen
-        const speedBtn = document.createElement('button');
-        speedBtn.innerHTML = '1x';
-        speedBtn.style.cssText = `background:rgba(255,255,255,0.14);border:none;color:white;font-size:16px;padding:8px 12px;border-radius:6px;font-weight:600;cursor:pointer;`;
-        const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-        let currentSpeedIndex = 3;
-        speedBtn.onclick = (e) => { e.stopPropagation(); showControls(); currentSpeedIndex = (currentSpeedIndex + 1) % speeds.length; video.playbackRate = speeds[currentSpeedIndex]; speedBtn.innerHTML = speeds[currentSpeedIndex] + 'x'; };
-
-        const fullscreenIconBtn = document.createElement('button');
-        fullscreenIconBtn.innerHTML = '⛶';
-        fullscreenIconBtn.style.cssText = `background:transparent;border:none;color:white;font-size:20px;cursor:pointer;padding:6px;`;
-        fullscreenIconBtn.onclick = (e) => { e.stopPropagation(); showControls(); if (document.fullscreenElement) document.exitFullscreen(); else container.requestFullscreen().catch(()=>{}); };
-
-        const rightControls = document.createElement('div');
-        rightControls.style.cssText = `display:flex;align-items:center;gap:12px;`;
-        rightControls.appendChild(speedBtn);
-        rightControls.appendChild(fullscreenIconBtn);
-
-        // Arrange playbackControls: left spacer (empty) | centerControls (centered) | rightControls
-        const leftSpacer = document.createElement('div');
-        leftSpacer.style.cssText = `width: 1px;`; // small spacer to allow center alignment
-        playbackControls.appendChild(leftSpacer);
-        playbackControls.appendChild(centerControls);
-        playbackControls.appendChild(rightControls);
-
-        // Close button
-        const closeBtn = document.createElement('button');
-        closeBtn.innerHTML = '✕';
-        closeBtn.style.cssText = `
-            position:absolute;top:20px;left:20px;background:rgba(0,0,0,0.5);color:white;border:none;font-size:28px;cursor:pointer;padding:10px;border-radius:50%;width:46px;height:46px;display:flex;align-items:center;justify-content:center;transition:opacity 0.25s;
+        playPauseBtn.innerHTML = "⏸";
+        playPauseBtn.style.cssText = `
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 26px;
+            cursor: pointer;
+            padding: 6px 10px;
         `;
-        closeBtn.onclick = (e) => {
+        playPauseBtn.onclick = (e) => {
             e.stopPropagation();
-            container.style.display = 'none';
-            floatingBtn.style.display = 'flex';
-            restoreVideo();
+            if (video.paused) video.play();
+            else video.pause();
+            updatePlayIcon();
+            showControls();
         };
 
-        // Append assembled control overlays
-        controlsOverlay.appendChild(seekContainer);
-        controlsOverlay.appendChild(playbackControls);
+        /* SEPARATOR (center empty for gestures or future UI) */
+        const centerSpacer = document.createElement('div');
+        centerSpacer.style.cssText = `flex:1;`;
 
-        container.appendChild(closeBtn);
-        container.appendChild(videoWrapper);
-        container.appendChild(controlsOverlay);
+        /* Right-side buttons: SPEED + FULLSCREEN */
+        const speedBtn = document.createElement('button');
+        speedBtn.innerHTML = "1x";
+        speedBtn.style.cssText = `
+            background: rgba(255,255,255,0.14);
+            border:none;
+            padding:6px 10px;
+            border-radius:6px;
+            color:white;
+            font-weight:600;
+            cursor:pointer;
+        `;
+        const speeds = [0.25,0.5,0.75,1,1.25,1.5,1.75,2];
+        let speedIndex = 3;
+        speedBtn.onclick = (e) => {
+            e.stopPropagation();
+            speedIndex = (speedIndex + 1) % speeds.length;
+            video.playbackRate = speeds[speedIndex];
+            speedBtn.innerHTML = speeds[speedIndex] + "x";
+            showControls();
+        };
 
-        // Add to DOM
-        document.body.appendChild(floatingBtn);
-        document.body.appendChild(container);
+        const fsBtn = document.createElement('button');
+        fsBtn.innerHTML = "⛶";
+        fsBtn.style.cssText = `
+            background:transparent;
+            border:none;
+            color:white;
+            font-size:20px;
+            cursor:pointer;
+            padding:6px;
+        `;
+        fsBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (document.fullscreenElement) document.exitFullscreen();
+            else container.requestFullscreen().catch(()=>{});
+            showControls();
+        };
 
-        // --- Seek and time updates ---
+        const rightSide = document.createElement('div');
+        rightSide.style.cssText = `display:flex;align-items:center;gap:12px;`;
+        rightSide.appendChild(speedBtn);
+        rightSide.appendChild(fsBtn);
+
+        bottomControls.appendChild(playPauseBtn);
+        bottomControls.appendChild(centerSpacer);
+        bottomControls.appendChild(rightSide);
+
+        /* Add the seek bar + bottom controls into overlay */
+        controlsOverlay.appendChild(seekRow);
+        controlsOverlay.appendChild(bottomControls);
+
+        /* =============================
+           CLOSE BUTTON (top-left)
+        ============================== */
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = "✕";
+        closeBtn.style.cssText = `
+            position:absolute;
+            left:20px;top:20px;
+            width:46px;height:46px;
+            border-radius:50%;
+            border:none;
+            background:rgba(0,0,0,0.45);
+            color:white;
+            font-size:26px;
+            cursor:pointer;
+            z-index:50;
+            opacity:0;visibility:hidden;
+        `;
+        closeBtn.onclick = () => {
+            container.style.display = "none";
+            floatingBtn.style.display = "flex";
+            restoreVideo();
+        };
+        videoWrapper.appendChild(closeBtn);
+
+        /* =============================
+           PLAY/PAUSE BUTTON ICON UPDATE
+        ============================== */
+        function updatePlayIcon() {
+            playPauseBtn.innerHTML = video.paused ? "▶" : "⏸";
+        }
+        video.addEventListener("play", updatePlayIcon);
+        video.addEventListener("pause", updatePlayIcon);
+
+        /* =============================
+           SEEK BAR UPDATES
+        ============================== */
         video.addEventListener('loadedmetadata', () => {
             seekBar.max = video.duration || 0;
-            durationDisplay.textContent = formatTime(video.duration || 0);
+            durTime.textContent = formatTime(video.duration);
         });
         video.addEventListener('timeupdate', () => {
             if (!seekBar.matches(':active')) seekBar.value = video.currentTime;
-            currentTimeDisplay.textContent = formatTime(video.currentTime || 0);
+            curTime.textContent = formatTime(video.currentTime);
         });
 
-        seekBar.addEventListener('input', (e) => { e.stopPropagation(); video.currentTime = parseFloat(seekBar.value); });
-        seekBar.addEventListener('change', (e) => { e.stopPropagation(); video.currentTime = parseFloat(seekBar.value); });
+        seekBar.addEventListener('input', () => video.currentTime = Number(seekBar.value));
 
-        const updatePlayPauseIcon = () => { playPauseBtn.innerHTML = video.paused ? '▶' : '⏸'; };
-        video.addEventListener('play', updatePlayPauseIcon);
-        video.addEventListener('pause', updatePlayPauseIcon);
-        updatePlayPauseIcon();
-
-        // --- Gesture system (Option A: YouTube-style but without vertical volume) ---
-        // State variables
-        let lastTap = 0;
-        let tapCount = 0;
-        const DOUBLE_TAP_MAX_DELAY = 300; // ms
-        const LONG_PRESS_DELAY = 500; // ms
-        let longPressTimer = null;
-
-        // For swipe/drag
-        let touchActive = false;
-        let startX = 0, startY = 0;
-        let isHorizontal = false, isVertical = false;
-        let accumulatedSeekPreview = 0; // seconds preview while dragging
-        let previewActive = false;
-
-        // preview overlay shown during hold or swipe
+        /* =============================
+           YOU-TUBE STYLE DOUBLE TAP LOGIC
+           (Left/Center/Right zones)
+        ============================== */
         const previewOverlay = document.createElement('div');
         previewOverlay.style.cssText = `
-            position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-            background:rgba(0,0,0,0.6);color:white;padding:10px 14px;border-radius:8px;font-size:16px;display:none;z-index:30;
+            position:absolute;
+            left:50%;top:50%;
+            transform:translate(-50%,-50%);
+            background:rgba(0,0,0,0.6);
+            color:white;
+            padding:10px 14px;
+            border-radius:8px;
+            font-size:18px;
+            display:none;
+            z-index:90;
             pointer-events:none;
         `;
-        previewOverlay.textContent = '0:00';
         videoWrapper.appendChild(previewOverlay);
 
-        // Helper: show preview with a time
-        const showPreview = (timeSec) => {
-            previewOverlay.textContent = formatTime(Math.max(0, Math.min(video.duration || 0, timeSec)));
-            previewOverlay.style.display = 'block';
-            previewActive = true;
-        };
-        const hidePreview = () => { previewOverlay.style.display = 'none'; previewActive = false; accumulatedSeekPreview = 0; };
+        function showMessage(msg) {
+            previewOverlay.textContent = msg;
+            previewOverlay.style.display = "block";
+            clearTimeout(previewOverlay._t);
+            previewOverlay._t = setTimeout(() => previewOverlay.style.display = "none", 700);
+        }
 
-        // Convert horizontal delta to seconds (full width => 30% of duration or 60s min)
-        const deltaXToSeconds = (dx) => {
-            const w = videoWrapper.clientWidth || window.innerWidth;
+        function getZone(x) {
+            const w = videoWrapper.clientWidth;
+            if (x < w / 3) return "left";
+            if (x > 2 * w / 3) return "right";
+            return "center";
+        }
+
+        /* DOUBLE TAP STATE */
+        let lastTap = 0;
+        let tapCount = 0;
+        const DOUBLE_TAP_DELAY = 300;
+
+        /* SWIPE PREVIEW */
+        let isTouching = false;
+        let startX = 0;
+        let accumulated = 0;
+
+        function deltaToSeconds(dx) {
+            const w = videoWrapper.clientWidth || 400;
             const dur = video.duration || 60;
-            const scale = Math.max(60, dur * 0.3);
+            const scale = Math.max(50, dur * 0.3);
             return (dx / w) * scale;
-        };
+        }
 
-        // Touch handlers
         videoWrapper.addEventListener('touchstart', (ev) => {
-            if (!ev.touches || ev.touches.length > 1) return;
+            if (ev.touches.length > 1) return;
             const t = ev.touches[0];
-            touchActive = true;
+
+            isTouching = true;
             startX = t.clientX;
-            startY = t.clientY;
-            isHorizontal = isVertical = false;
-            accumulatedSeekPreview = 0;
+            accumulated = 0;
 
-            // Long press detection (show preview)
-            clearTimeout(longPressTimer);
-            longPressTimer = setTimeout(() => {
-                showPreview(video.currentTime || 0);
-            }, LONG_PRESS_DELAY);
-
-            // Double-tap detection
             const now = Date.now();
-            if (now - lastTap <= DOUBLE_TAP_MAX_DELAY) tapCount += 1;
-            else tapCount = 1;
+            tapCount = now - lastTap < DOUBLE_TAP_DELAY ? tapCount + 1 : 1;
             lastTap = now;
         }, { passive: false });
 
         videoWrapper.addEventListener('touchmove', (ev) => {
-            if (!touchActive) return;
+            if (!isTouching) return;
             const t = ev.touches[0];
             const dx = t.clientX - startX;
-            const dy = t.clientY - startY;
-            const absX = Math.abs(dx), absY = Math.abs(dy);
 
-            // determine gesture orientation if not decided
-            if (!isHorizontal && !isVertical) {
-                if (absX > 10 || absY > 10) {
-                    if (absX > absY) isHorizontal = true;
-                    else isVertical = true;
-                }
-            }
-
-            // Only handle horizontal swipes (vertical gestures are ignored to allow page scroll)
-            if (isHorizontal) {
-                ev.preventDefault(); // prevent page horizontal swipe
-                const sec = deltaXToSeconds(dx);
-                accumulatedSeekPreview = sec;
-                showPreview((video.currentTime || 0) + accumulatedSeekPreview);
-            }
+            accumulated = deltaToSeconds(dx);
+            showMessage(formatTime((video.currentTime || 0) + accumulated));
+            ev.preventDefault();
         }, { passive: false });
 
         videoWrapper.addEventListener('touchend', (ev) => {
-            clearTimeout(longPressTimer);
-            if (!touchActive) return;
-            touchActive = false;
+            if (!isTouching) return;
+            isTouching = false;
 
-            // If we showed preview due to swipe, commit the seek
-            if (previewActive && Math.abs(accumulatedSeekPreview) > 0.5) {
-                const target = Math.max(0, Math.min(video.duration || 0, (video.currentTime || 0) + accumulatedSeekPreview));
-                video.currentTime = target;
-                hidePreview();
-            } else {
-                // handle double-tap vs single tap
-                const now = Date.now();
-                if (tapCount >= 2 && (now - lastTap) <= DOUBLE_TAP_MAX_DELAY + 30) {
-                    let touchX = 0;
-                    if (ev.changedTouches && ev.changedTouches.length) touchX = ev.changedTouches[0].clientX;
-                    else touchX = startX;
-                    const half = (videoWrapper.clientWidth || window.innerWidth) / 2;
-                    if (touchX < half) {
-                        video.currentTime = Math.max(0, (video.currentTime || 0) - 10);
-                        previewOverlay.textContent = '⟲ 10s';
-                        previewOverlay.style.display = 'block';
-                        setTimeout(hidePreview, 600);
-                    } else {
-                        video.currentTime = Math.min(video.duration || Infinity, (video.currentTime || 0) + 10);
-                        previewOverlay.textContent = '⟳ 10s';
-                        previewOverlay.style.display = 'block';
-                        setTimeout(hidePreview, 600);
-                    }
-                    tapCount = 0;
-                } else {
-                    // single tap toggles controls (show/hide)
-                    toggleControls();
-                    setTimeout(() => { tapCount = 0; }, DOUBLE_TAP_MAX_DELAY + 20);
+            if (Math.abs(accumulated) > 0.5) {
+                video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + accumulated));
+                showMessage(formatTime(video.currentTime));
+                accumulated = 0;
+                return;
+            }
+
+            const now = Date.now();
+            const dbl = tapCount >= 2 && now - lastTap < DOUBLE_TAP_DELAY + 50;
+
+            if (dbl) {
+                const x = ev.changedTouches[0].clientX;
+                const zone = getZone(x);
+
+                if (zone === "left") {
+                    video.currentTime = Math.max(0, video.currentTime - 10);
+                    showMessage("⟲ 10s");
                 }
+                else if (zone === "right") {
+                    video.currentTime = Math.min(video.duration, video.currentTime + 10);
+                    showMessage("⟳ 10s");
+                }
+                else {
+                    if (video.paused) video.play();
+                    else video.pause();
+                    updatePlayIcon();
+                    showMessage(video.paused ? "Paused" : "Playing");
+                }
+
+                tapCount = 0;
             }
-
-            isHorizontal = isVertical = false;
-            accumulatedSeekPreview = 0;
-        }, { passive: false });
-
-        // Desktop equivalents (mouse): drag to seek preview, dblclick skip
-        let mouseDown = false, mouseStartX = 0, mouseAccSeek = 0;
-        videoWrapper.addEventListener('mousedown', (e) => {
-            // left click only
-            if (e.button !== 0) return;
-            mouseDown = true;
-            mouseStartX = e.clientX;
-            mouseAccSeek = 0;
-            e.preventDefault();
-            longPressTimer = setTimeout(() => { showPreview(video.currentTime || 0); }, LONG_PRESS_DELAY);
-        });
-        window.addEventListener('mousemove', (e) => {
-            if (!mouseDown) return;
-            const dx = e.clientX - mouseStartX;
-            mouseAccSeek = deltaXToSeconds(dx);
-            showPreview((video.currentTime || 0) + mouseAccSeek);
-        });
-        window.addEventListener('mouseup', (e) => {
-            clearTimeout(longPressTimer);
-            if (!mouseDown) return;
-            mouseDown = false;
-            if (previewActive && Math.abs(mouseAccSeek) > 0.5) {
-                video.currentTime = Math.max(0, Math.min(video.duration || 0, (video.currentTime || 0) + mouseAccSeek));
-                hidePreview();
-            } else {
-                hidePreview();
+            else {
+                toggleControls();
             }
         });
 
-        // Double-click desktop: skip 10s left/right
+        /* =============================
+           MOUSE DOUBLE CLICK BEHAVIOR
+        ============================== */
         videoWrapper.addEventListener('dblclick', (e) => {
-            const rect = videoWrapper.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            if (x < rect.width / 2) {
-                video.currentTime = Math.max(0, (video.currentTime || 0) - 10);
-                previewOverlay.textContent = '⟲ 10s';
-            } else {
-                video.currentTime = Math.min(video.duration || Infinity, (video.currentTime || 0) + 10);
-                previewOverlay.textContent = '⟳ 10s';
+            const zone = getZone(e.clientX);
+
+            if (zone === "left") {
+                video.currentTime = Math.max(0, video.currentTime - 10);
+                showMessage("⟲ 10s");
             }
-            previewOverlay.style.display = 'block';
-            setTimeout(hidePreview, 600);
+            else if (zone === "right") {
+                video.currentTime = Math.min(video.duration, video.currentTime + 10);
+                showMessage("⟳ 10s");
+            }
+            else {
+                if (video.paused) video.play();
+                else video.pause();
+                updatePlayIcon();
+                showMessage(video.paused ? "Paused" : "Playing");
+            }
         });
 
-        // --- Floating button click ---
+        /* =============================
+           FLOATING BUTTON CLICK
+        ============================== */
         floatingBtn.onclick = () => {
-            container.style.display = 'flex';
-            floatingBtn.style.display = 'none';
+            container.style.display = "flex";
+            floatingBtn.style.display = "none";
             moveVideoToOverlay();
             showControls();
         };
 
-        // Remove controls when video removed from DOM
+        /* CLEANUP if video removed */
         const observer = new MutationObserver(() => {
             if (!document.body.contains(video)) {
                 container.remove();
@@ -518,35 +508,14 @@
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
-
-        // Keep floating visibility synced when tab visibility changes
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) floatingBtn.style.opacity = '0';
-            else floatingBtn.style.opacity = '1';
-        });
-
-        // Keyboard shortcuts when overlay open (volume keys removed)
-        document.addEventListener('keydown', (e) => {
-            if (container.style.display !== 'flex') return;
-            if (e.key === 'ArrowRight') { video.currentTime = Math.min((video.duration || Infinity), (video.currentTime || 0) + 5); showControls(); }
-            if (e.key === 'ArrowLeft') { video.currentTime = Math.max(0, (video.currentTime || 0) - 5); showControls(); }
-            if (e.key === ' ') { e.preventDefault(); if (video.paused) video.play(); else video.pause(); updatePlayPauseIcon(); showControls(); }
-            if (e.key === 'f') { if (document.fullscreenElement) document.exitFullscreen(); else container.requestFullscreen().catch(()=>{}); }
-            if (e.key === 'Escape') { closeBtn.click(); }
-        });
-
-        // Ensure seekBar updates on metadata load
-        video.addEventListener('loadedmetadata', () => { seekBar.max = video.duration || 0; durationDisplay.textContent = formatTime(video.duration || 0); });
     }
 
     function findVideos() {
-        document.querySelectorAll('video').forEach(addControls);
+        document.querySelectorAll("video").forEach(addControls);
     }
 
-    // Initial scan + observe DOM changes
     findVideos();
     const observer = new MutationObserver(findVideos);
     observer.observe(document.body, { childList: true, subtree: true });
-    setInterval(findVideos, 2000);
 
 })();
