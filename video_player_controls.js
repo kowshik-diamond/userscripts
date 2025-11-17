@@ -324,10 +324,27 @@
             opacity:0;visibility:hidden;
         `;
         closeBtn.addEventListener("click", (e) => {
-            e.stopPropagation();   // <-- IMPORTANT FIX
-            container.style.display = "none";
-            floatingBtn.style.display = "flex";
-            restoreVideo();
+            e.stopPropagation();
+            
+            // If in fullscreen, exit first (Firefox Android requires this)
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(()=>{});
+                
+                // Wait until fullscreen fully exits
+                document.addEventListener("fullscreenchange", function handler() {
+                    if (!document.fullscreenElement) {
+                        document.removeEventListener("fullscreenchange", handler);
+                        container.style.display = "none";
+                        floatingBtn.style.display = "flex";
+                        restoreVideo();
+                    }
+                });
+            } else {
+                // Normal exit when not fullscreen
+                container.style.display = "none";
+                floatingBtn.style.display = "flex";
+                restoreVideo();
+            }
         });
         videoWrapper.appendChild(closeBtn);
 
