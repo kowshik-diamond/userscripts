@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Video Player ControlsD
+// @name         Video Player Controls
 // @namespace    http://tampermonkey.net/
 // @version      1.5
 // @description  YouTube-style gestures + seek bar + fullscreen overlay; double-tap left/right/center; play/pause button in left corner.
