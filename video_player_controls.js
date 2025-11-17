@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Video Player Controls + Gestures (No Volume) - Centered Controls UPDATED
+// @name         Video Player ControlsD
 // @namespace    http://tampermonkey.net/
 // @version      1.5
-// @description  YouTube-style gestures + seek bar + fullscreen overlay; double-tap left/right/center; play/pause button in left corner; no volume controls; forward/backward buttons removed. FIXED: Close button now responds on first tap.
+// @description  YouTube-style gestures + seek bar + fullscreen overlay; double-tap left/right/center; play/pause button in left corner.
 // @author       You
 // @match        *://*/*
 // @grant        none
