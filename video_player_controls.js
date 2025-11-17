@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Video Player Controls + Gestures (No Volume) - Centered Controls UPDATED
 // @namespace    http://tampermonkey.net/
-// @version      1.4
-// @description  YouTube-style gestures + seek bar + fullscreen overlay; double-tap left/right/center; play/pause button in left corner; no volume controls; forward/backward buttons removed.
+// @version      1.5
+// @description  YouTube-style gestures + seek bar + fullscreen overlay; double-tap left/right/center; play/pause button in left corner; no volume controls; forward/backward buttons removed. FIXED: Close button now responds on first tap.
 // @author       You
 // @match        *://*/*
 // @grant        none
@@ -136,6 +136,8 @@
             padding: 30px 20px 40px;
             opacity: 0; visibility: hidden;
             transition: opacity .25s, visibility .25s;
+            z-index: 10;
+            pointer-events: auto;
         `;
         videoWrapper.appendChild(controlsOverlay);
 
@@ -306,7 +308,7 @@
         controlsOverlay.appendChild(bottomControls);
 
         /* =============================
-           CLOSE BUTTON (top-left)
+           CLOSE BUTTON (top-left) - FIXED
         ============================== */
         const closeBtn = document.createElement('button');
         closeBtn.innerHTML = "✕";
@@ -320,10 +322,13 @@
             color:white;
             font-size:26px;
             cursor:pointer;
-            z-index:50;
+            z-index:100;
             opacity:0;visibility:hidden;
+            touch-action: manipulation;
         `;
-        closeBtn.addEventListener("click", (e) => {
+        
+        function handleClose(e) {
+            e.preventDefault();
             e.stopPropagation();
             
             // If in fullscreen, exit first (Firefox Android requires this)
@@ -345,7 +350,10 @@
                 floatingBtn.style.display = "flex";
                 restoreVideo();
             }
-        });
+        }
+        
+        closeBtn.addEventListener("click", handleClose);
+        closeBtn.addEventListener("touchend", handleClose);
         videoWrapper.appendChild(closeBtn);
 
         /* =============================
