@@ -323,11 +323,12 @@
             z-index:50;
             opacity:0;visibility:hidden;
         `;
-        closeBtn.onclick = () => {
+        closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();   // <-- IMPORTANT FIX
             container.style.display = "none";
             floatingBtn.style.display = "flex";
             restoreVideo();
-        };
+        });
         videoWrapper.appendChild(closeBtn);
 
         /* =============================
